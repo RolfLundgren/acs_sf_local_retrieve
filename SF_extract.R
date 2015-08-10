@@ -8,6 +8,23 @@ setwd("C:/data/acs/ACS_2013_5year/") # Important to ensure everything is in corr
 
 ## Variables to set
 
+sf1 <- 'Virginia_All_Geographies_Not_Tracts_Block_Groups.zip'
+sf2 <- 'Virginia_Tracts_Block_Groups_Only.zip'
+sfapp <- 'ACS_2013_SF_5YR_Appendices.xls'
+sftemplates <- '2013_5yr_Summary_FileTemplates.zip'
+sfturl <- 'http://www2.census.gov/programs-surveys/acs/summary_file/2013/data/'
+sfurl <- 'ftp://ftp.census.gov/acs2013_5yr/summaryfile/2009-2013_ACSSF_By_State_All_Tables/'
+sfappurl <- 'ftp://ftp.census.gov/acs2013_5yr/summaryfile/'
+geohead <- c('FILEID','STUSAB','SUMLEVEL','COMPONENT','LOGRECNO','US','REGION','DIVISION',
+             'STATECE','STATE','COUNTY','COUSUB','PLACE','TRACT','BLKGRP','CONCIT','AIANHH',
+             'AIANHHFP','AIHHTLI','AITSCE','AITS','ANRC','CBSA','CSA','METDIV','MACC','MEMI',
+             'NECTA','CNECTA','NECTADIV','UA','BLANK','CDCURR','SLDU','SLDL','BLANK','BLANK',
+             'ZCTA5','SUBMCD','SDELM','SDSEC','SDUNI','UR','PCI','BLANK','BLANK','PUMA5',
+             'BLANK','GEOID','NAME','BTTR','BTBG','BLANK')
+        ## Note: 2013 5-year table templates do not include the geo template,
+        ## but 3 and 1 year estimates do. Available here:
+        ## http://www.census.gov/programs-surveys/acs/data/summary-file.html
+
 sumlevelSet <- function(summarylevel) {
         if (summarylevel == '040') {
                 geolist <- c('LOGRECNO', 'STATE', 'GEOID', 'NAME')
@@ -24,22 +41,56 @@ sumlevelSet <- function(summarylevel) {
         } else print("Unable to process that summary level.")
 }
 
+
+
+
 SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table = FALSE) {
         
-        # sets path according the appropriate summary level
+        
+        neededfiles <- list.files()
+        
+        
+        # sets path according the appropriate summary level and checks for necessary files
         if (geo_level %in% c('150', '140')) {
-                sf_location <- "Virginia_Tracts_Block_Groups_Only/"
+                if (sf2 %in% neededfiles == FALSE) {
+                        print("Downloading summary file. Please wait.")
+                        download.file(paste0(sfurl, sf2), destfile = sf2, method = 'internal', mode = 'wb')
+                        print ("Download complete.")
+                }
+                zloc <- sf2
         } else {
-                sf_location <- "Virginia_All_Geographies_Not_Tracts_Block_Groups/"
+                if (sf1 %in% neededfiles == FALSE) {
+                        print("Downloading summary file. Please wait.")
+                        download.file(paste0(sfurl, sf1), destfile = sf1, method = 'internal', mode = 'wb')
+                        print ("Download complete.")
+                }
+                zloc <- sf1
+        }
+        
+        if (sfapp %in% neededfiles == FALSE) {
+                print("Downloading required files. Please wait.")
+                download.file(paste0(sfappurl, sfapp), destfile = sfapp, method = 'internal', mode = 'wb')
+                print ("Download complete.")
+        }
+        
+        if (sftemplates %in% neededfiles == FALSE) {
+                print("Downloading required files. Please wait.")
+                download.file(paste0(sfturl, sftemplates), destfile = sftemplates, method = 'internal', mode = 'wb')
+                print ("Download complete.")
         }
         
         sumrecords <- sumlevelSet(geo_level)
         
         # creates a geography table to join with summary file table
-        geo_head_desc <- read.csv("2013_SFGeoFileTemplate.csv", colClasses = "character")
-        geocol <- colnames(geo_head_desc)
-        va_geo <- read.csv(paste0(sf_location,'g20135va.csv'), header=FALSE, col.names = geocol, colClasses = "character")
-        remove(geo_head_desc, geocol)
+        va_geo <- read.csv(unz(zloc, 'g20135va.csv', open = 'r'), header = FALSE,
+                           col.names = geohead, colClasses = 'character')
+        close(zloc)
+        
+        
+        
+        ## OLD CODE
+        #va_geo <- read.csv(paste0(sf_location,'g20135va.csv'), header=FALSE,
+         #                  col.names = geohead, colClasses = "character")
         
         # subsets geography table to desired summary level, adds simplified 'geoid2' column
         geo_sub <- subset(va_geo, SUMLEVEL == geo_level, select = sumrecords)
@@ -49,7 +100,7 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         #geo_sub
         
         #creates data frame for summary file based on identified table number
-        acs_tables <- read.xlsx("ACS2013_5yr_App.xlsx", sheetIndex = 1, stringsAsFactors = FALSE)
+        acs_tables <- read.xlsx(sfapp, sheetIndex = 1, stringsAsFactors = FALSE)
         #acs_tables$Table.Title[which(acs_tables$Table.Number == table_number)]
         
         # creates path variables depending on the table number and associated sequence file
@@ -62,14 +113,16 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         seqcolsb <- c(1:6, seqcolsa[[1]]:seqcolsa[[2]])
         
         # creates template...shell...word?
-        seqtable <- read.xlsx(paste0("2013_5yr_Summary_FileTemplates/",seqtemplatename), sheetIndex = 1)
+        seqtable <- read.xlsx(unz(sftemplates, seqtemplatename, open = 'r'), sheetIndex = 1)
+        close(sftemplates)
         classxxx <- vector(length = ncol(seqtable))
         classxxx[1:6] <- "character" ## Setting up initial header columns for logrecno join
         classxxx[7:length(classxxx)] <- "integer"
         
         # loading data into template
-        s <- read.csv(paste0(sf_location, seqfilename), header = FALSE, quote = '"',
+        s <- read.csv(unz(zloc, seqfilename, open = 'r'), header = FALSE, quote = '"',
                       col.names = colnames(seqtable), colClasses = classxxx)
+        close(zloc)
         s <- s[seqcolsb]
         remove(seqtable, classxxx)
         
@@ -77,9 +130,8 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         s_geo <- merge(geo_sub, s, by = "LOGRECNO")
         
         if (write_table == TRUE) {
-                contents <- list.files()
                 zdir <- paste0(getwd(), '/OutputTables/')
-                if (("OutputTables" %in% contents) == FALSE) dir.create("OutputTables/")
+                if (("OutputTables" %in% neededfiles) == FALSE) dir.create("OutputTables/")
                 write.csv(s_geo, paste0('OutputTables/', table_number,'_', geo_level, '.csv'), row.names = FALSE)
                 print(paste0('Table output to ... ', zdir, table_number,'_', geo_level, '.csv'))
         }
