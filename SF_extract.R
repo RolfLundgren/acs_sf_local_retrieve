@@ -1,6 +1,7 @@
-library("xlsx")
+library("gdata")
+perl <- "C:/Strawberry/perl/bin/perl.exe"
 
-setwd("C:/data/acs/ACS_2013_5year/") # Important to ensure everything is in correct path...
+setwd("C:/r_data") # Important to ensure everything is in correct path...
 # Files needed:         Summary files (txt or csv format)
 #                       Geography linking file (part of summary files)
 #                       Geography file template (possible elimination in future)
@@ -21,6 +22,8 @@ geohead <- c('FILEID','STUSAB','SUMLEVEL','COMPONENT','LOGRECNO','US','REGION','
              'NECTA','CNECTA','NECTADIV','UA','BLANK','CDCURR','SLDU','SLDL','BLANK','BLANK',
              'ZCTA5','SUBMCD','SDELM','SDSEC','SDUNI','UR','PCI','BLANK','BLANK','PUMA5',
              'BLANK','GEOID','NAME','BTTR','BTBG','BLANK')
+temp <- tempfile(fileext = 'xls')
+
         ## Note: 2013 5-year table templates do not include the geo template,
         ## but 3 and 1 year estimates do. Available here:
         ## http://www.census.gov/programs-surveys/acs/data/summary-file.html
@@ -82,9 +85,9 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         sumrecords <- sumlevelSet(geo_level)
         
         # creates a geography table to join with summary file table
-        va_geo <- read.csv(unz(zloc, 'g20135va.csv', open = 'r'), header = FALSE,
+        va_geo <- read.csv(unz(zloc, 'g20135va.csv', open = ''), header = FALSE,
                            col.names = geohead, colClasses = 'character')
-        close(zloc)
+        if (length(showConnections()) > 0) close(zloc)
         
         
         
@@ -100,29 +103,32 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         #geo_sub
         
         #creates data frame for summary file based on identified table number
-        acs_tables <- read.xlsx(sfapp, sheetIndex = 1, stringsAsFactors = FALSE)
+        acs_tables <- read.xls(sfapp, sheet = 1, stringsAsFactors = FALSE, colClasses = 'character',
+                               perl = perl)
         #acs_tables$Table.Title[which(acs_tables$Table.Number == table_number)]
         
         # creates path variables depending on the table number and associated sequence file
         seqfilenumber <- acs_tables$Summary.File.Sequence.Number[which(acs_tables$Table.Number == table_number)]
         seqfilename <- paste0('e20135va', seqfilenumber, '000.txt')
         seqtemplatename <- paste0('Seq', as.integer(seqfilenumber),'.xls')
+
         seqcolsa <- strsplit(acs_tables$Summary.File.Starting.and.Ending.Positions[which(acs_tables$Table.Number == table_number)],
                              '-')
         seqcolsa <- seqcolsa[[1]]
         seqcolsb <- c(1:6, seqcolsa[[1]]:seqcolsa[[2]])
         
-        # creates template...shell...word?
-        seqtable <- read.xlsx(unz(sftemplates, seqtemplatename, open = 'r'), sheetIndex = 1)
-        close(sftemplates)
+        # creates template...shell...word? must first unzip folder to get at xls files
+        temp <- unzip(sftemplates, files = seqtemplatename)
+        seqtable <- read.xls(temp, sheet = 1, perl = perl)
+        
         classxxx <- vector(length = ncol(seqtable))
         classxxx[1:6] <- "character" ## Setting up initial header columns for logrecno join
         classxxx[7:length(classxxx)] <- "integer"
         
         # loading data into template
-        s <- read.csv(unz(zloc, seqfilename, open = 'r'), header = FALSE, quote = '"',
+        s <- read.csv(unz(zloc, seqfilename, open = ''), header = FALSE, quote = '"',
                       col.names = colnames(seqtable), colClasses = classxxx)
-        close(zloc)
+        if (length(showConnections()) > 0) close(zloc)
         s <- s[seqcolsb]
         remove(seqtable, classxxx)
         
