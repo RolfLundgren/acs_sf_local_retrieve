@@ -76,6 +76,10 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
                 print ("Download complete.")
         }
         
+        #creates data frame for summary file based on identified table number, checks if table available
+        acs_tables <- read.xls(sfapp, sheet = 1, stringsAsFactors = FALSE, colClasses = 'character', perl = perl)
+        if (table_number %in% acs_tables$Table.Number == FALSE) stop("Table unavailable.")
+        
         if (sftemplates %in% neededfiles == FALSE) {
                 print("Downloading required files. Please wait.")
                 download.file(paste0(sfturl, sftemplates), destfile = sftemplates, method = 'internal', mode = 'wb')
@@ -103,8 +107,7 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         #geo_sub
         
         #creates data frame for summary file based on identified table number
-        acs_tables <- read.xls(sfapp, sheet = 1, stringsAsFactors = FALSE, colClasses = 'character',
-                               perl = perl)
+        ## acs_tables <- read.xls(sfapp, sheet = 1, stringsAsFactors = FALSE, colClasses = 'character', perl = perl)
         #acs_tables$Table.Title[which(acs_tables$Table.Number == table_number)]
         
         # creates path variables depending on the table number and associated sequence file
@@ -112,8 +115,7 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         seqfilename <- paste0('e20135va', seqfilenumber, '000.txt')
         seqtemplatename <- paste0('Seq', as.integer(seqfilenumber),'.xls')
 
-        seqcolsa <- strsplit(acs_tables$Summary.File.Starting.and.Ending.Positions[which(acs_tables$Table.Number == table_number)],
-                             '-')
+        seqcolsa <- strsplit(acs_tables$Summary.File.Starting.and.Ending.Positions[which(acs_tables$Table.Number == table_number)], '-')
         seqcolsa <- seqcolsa[[1]]
         seqcolsb <- c(1:6, seqcolsa[[1]]:seqcolsa[[2]])
         
@@ -123,11 +125,11 @@ SF_extract <- function(geo_level = '140', table_number = 'B03002', write_table =
         
         classxxx <- vector(length = ncol(seqtable))
         classxxx[1:6] <- "character" ## Setting up initial header columns for logrecno join
-        classxxx[7:length(classxxx)] <- "integer"
+        classxxx[7:length(classxxx)] <- "double"
         
         # loading data into template
         s <- read.csv(unz(zloc, seqfilename, open = ''), header = FALSE, quote = '"',
-                      col.names = colnames(seqtable), colClasses = classxxx)
+                      col.names = colnames(seqtable), colClasses = classxxx, comment.char = ".")
         if (length(showConnections()) > 0) close(zloc)
         s <- s[seqcolsb]
         remove(seqtable, classxxx)
